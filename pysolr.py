@@ -585,8 +585,26 @@ class Solr(object):
         if 'QTime' in result.get('responseHeader', {}):
             result_kwargs['qtime'] = result['responseHeader']['QTime']
 
-        self.log.debug("Found '%s' search results." % result['response']['numFound'])
-        return Results(result['response']['docs'], result['response']['numFound'], **result_kwargs)
+        # TODO: This is a hacked together bit of code that will convert a group
+        # search result to a regular search result.
+        # NOTE only the first grouped result is used.
+        response = None
+        if 'grouped' in result and len(result['grouped']) > 0:
+            docs = []
+            for key, grouped in result['grouped'].items():
+                numFound = grouped['ngroups']
+                for group in grouped['groups']:
+                    for doc in group['doclist']['docs']:
+                        docs.append(doc)
+                # For now just return the first group as a normal doclist response.
+                response = {}
+                response['numFound'] = numFound
+                response['docs'] = docs
+                break
+        if response is None:
+            response = result['response']
+        self.log.debug("Found '%s' search results." % response['numFound'])
+        return Results(response['docs'], response['numFound'], **result_kwargs)
 
     def more_like_this(self, q, mltfl, **kwargs):
         """
